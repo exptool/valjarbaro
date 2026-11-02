@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafikgenerator 9:16</title>
+    <style>
+        @font-face {
+            font-family: 'Siri Expressen Black Condensed';
+            src: url('SiriExpressen-BlackCondensed.otf') format('opentype');
+        }
+        body { 
+            background: #1e1e1e; 
+            color: #fff; 
+            font-family: sans-serif; 
+            margin: 0;
+            padding: 2vw;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .app-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 40px;
+            justify-content: center;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        h2 { 
+            margin-top: 0; 
+            font-family: 'Siri Expressen Black Condensed', sans-serif;
+            font-size: clamp(24px, 2vw, 32px);
+        }
+        .panel { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            flex: 1 1 300px;
+            max-width: 400px; 
+        }
+        .charts-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            flex: 2 1 600px;
+            justify-content: center;
+        }
+        .chart-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+            flex: 1 1 300px;
+            max-width: calc(80vh * 9 / 16);
+        }
+        input, button { 
+            padding: 12px; 
+            font-size: 18px; 
+        }
+        input[type="number"] {
+            background: #ffffff;
+            border: 1px solid #ccc;
+            color: #000000;
+            border-radius: 4px;
+            text-align: right;
+            width: 80px;
+            font-family: Arial, sans-serif;
+            font-weight: normal;
+            padding-right: 10px;
+            font-size: 18px;
+        }
+        button {
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            width: 100%;
+            font-family: 'Siri Expressen Black Condensed', sans-serif; 
+            font-size: clamp(18px, 1.5vw, 22px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        button:hover { 
+            opacity: 0.9; 
+            transform: translateY(-2px);
+        }
+        canvas { 
+            width: 100%; 
+            height: auto; 
+            max-height: 75vh; 
+            max-width: calc(75vh * 9 / 16); 
+            background-image: linear-gradient(45deg, #333 25%, transparent 25%), linear-gradient(-45deg, #333 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #333 75%), linear-gradient(-45deg, transparent 75%, #333 75%);
+            background-size: 20px 20px; 
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border: 1px solid #444;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        .font-preload { font-family: 'Siri Expressen Black Condensed'; visibility: hidden; position: absolute; }
+    </style>
+</head>
+<body>
+    <div class="font-preload">Preload</div>
+
+    <div class="app-container">
+        <div class="panel">
+            <h2>Kontroller</h2>
+            <div id="inputs"></div>
+            <button onclick="drawChart()" style="background: #006DBB; color: white; padding: 15px; margin-top: 10px;">Uppdatera diagram</button>
+        </div>
+
+        <div class="charts-container">
+            <div class="chart-wrapper">
+                <canvas id="canvasHorizontal" width="1080" height="1920"></canvas>
+                <button onclick="downloadPNG('canvasHorizontal', 'valjarbarometer')" style="background: #30A234; color: white;">Ladda ner Väljarbarometer</button>
+            </div>
+            <div class="chart-wrapper">
+                <canvas id="canvasBlock" width="1080" height="1920"></canvas>
+                <button onclick="downloadPNG('canvasBlock', 'blockindelning')" style="background: #30A234; color: white;">Ladda ner Blockindelning</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const parties = [
+            { id: 'V', name: 'Vänsterpartiet', color: '#DB0000', value: 0.0 },
+            { id: 'S', name: 'Socialdemokraterna', color: '#FF0027', value: 0.0 },
+            { id: 'MP', name: 'Miljöpartiet', color: '#30A234', value: 0.0 },
+            { id: 'C', name: 'Centerpartiet', color: '#004937', value: 0.0 },
+            { id: 'L', name: 'Liberalerna', color: '#006DBB', value: 0.0 },
+            { id: 'KD', name: 'Kristdemokraterna', color: '#0D15BC', value: 0.0 },
+            { id: 'M', name: 'Moderaterna', color: '#195393', value: 0.0 },
+            { id: 'SD', name: 'Sverigedemokraterna', color: '#FFD500', value: 0.0 }
+        ];
+
+        function createInputs() {
+            const container = document.getElementById('inputs');
+            container.innerHTML = '';
+            parties.forEach((p, i) => {
+                container.innerHTML += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center;">
+                        <div style="width: 18px; height: 18px; background-color: ${p.color}; border-radius: 4px; margin-right: 12px; border: 1px solid rgba(255,255,255,0.2);"></div>
+                        <label style="color: #ffffff; font-size: clamp(18px, 1.2vw, 24px); font-family: 'Siri Expressen Black Condensed', sans-serif; letter-spacing: 0.5px;">${p.name}</label>
+                    </div>
+                    <input type="number" id="val_${i}" value="${p.value}" step="0.1">
+                </div>`;
+            });
+        }
+
+        function drawChart() {
+            parties.forEach((p, i) => p.value = parseFloat(document.getElementById(`val_${i}`).value) || 0);
+            
+            document.fonts.ready.then(() => {
+                const cHoriz = document.getElementById('canvasHorizontal');
+                const ctxHoriz = cHoriz.getContext('2d');
+                ctxHoriz.clearRect(0, 0, cHoriz.width, cHoriz.height);
+                drawHorizontal(ctxHoriz);
+
+                const cBlock = document.getElementById('canvasBlock');
+                const ctxBlock = cBlock.getContext('2d');
+                ctxBlock.clearRect(0, 0, cBlock.width, cBlock.height);
+                drawBlock(ctxBlock);
+            });
+        }
+
+        function applyGlobalShadow(ctx) {
+            ctx.shadowColor = "rgba(0,0,0,0.6)"; 
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
+        function resetShadow(ctx) {
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
+        function drawHorizontal(ctx) {
+            const startX = 150;
+            let startY = 400;
+            const boxSize = 96;
+            const gap = 16;
+            const rowSpacing = 18;
+            const scale = 15; 
+            
+            const fourPercentX = startX + boxSize + gap + (4.0 * scale);
+            ctx.beginPath();
+            ctx.setLineDash([10, 10]);
+            ctx.moveTo(fourPercentX, startY - 20);
+            ctx.lineTo(fourPercentX, startY + (8 * (boxSize + rowSpacing)));
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.setLineDash([]); 
+
+            parties.forEach((p) => {
+                applyGlobalShadow(ctx);
+                
+                ctx.fillStyle = p.color;
+                // [övre-vänster, övre-höger, nedre-höger, nedre-vänster]
+                roundRect(ctx, startX, startY, boxSize, boxSize, [24, 0, 24, 0]);
+                ctx.fill();
+                
+                resetShadow(ctx);
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "white";
+                ctx.font = "50px 'Siri Expressen Black Condensed', sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(p.id, startX + boxSize/2, startY + boxSize/2 + 5);
+
+                const barWidth = p.value * scale;
+                const barX = startX + boxSize + gap;
+                
+                if (barWidth > 0) {
+                    applyGlobalShadow(ctx);
+                    ctx.fillStyle = p.color;
+                    roundRect(ctx, barX, startY, barWidth, boxSize, [24, 0, 24, 0]);
+                    ctx.fill();
+                    
+                    resetShadow(ctx);
+                    ctx.stroke();
+                }
+
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "white";
+                
+                ctx.font = "50px 'Siri Expressen Black Condensed', sans-serif";
+                ctx.textAlign = "left";
+                const displayVal = p.value.toFixed(1).replace('.', ',') + "%";
+                ctx.fillText(displayVal, barX + Math.max(barWidth, 0) + 20, startY + boxSize/2 + 5);
+                
+                resetShadow(ctx);
+                startY += boxSize + rowSpacing;
+            });
+        }
+
+        function drawBlock(ctx) {
+            const leftBlock = [parties[1], parties[0], parties[3], parties[2]];
+            const rightBlock = [parties[6], parties[7], parties[5], parties[4]];
+
+            const sumLeft = leftBlock.reduce((a, b) => a + b.value, 0);
+            const sumRight = rightBlock.reduce((a, b) => a + b.value, 0);
+
+            const scale = 22.5; 
+            const barWidth = 330;
+            const gap = 60;
+            const bottomY = 1600;
+            
+            const leftX = (1080 - (barWidth * 2 + gap)) / 2;
+            const rightX = leftX + barWidth + gap;
+
+            drawStackedBar(ctx, leftBlock, sumLeft, leftX, bottomY, barWidth, scale);
+            drawStackedBar(ctx, rightBlock, sumRight, rightX, bottomY, barWidth, scale);
+        }
+
+        function drawStackedBar(ctx, blockParties, total, x, bottomY, width, scale) {
+            let currentY = bottomY;
+            
+            const totalHeight = total * scale;
+            const topY = bottomY - totalHeight;
+
+            if(total > 0) {
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "white";
+                ctx.font = "100px 'Siri Expressen Black Condensed', sans-serif";
+                ctx.textAlign = "center";
+                // Lösning: sätter textBaseline till 'bottom' och sätter gapet exakt utifrån stapelns höjd (topY).
+                ctx.textBaseline = "bottom"; 
+                // Avståndet är nu halverat (från 25 px till 12 px)
+                ctx.fillText(total.toFixed(1).replace('.', ',') + "%", x + width/2, topY - 12);
+                resetShadow(ctx);
+            }
+
+            const activeParties = [...blockParties].reverse().filter(p => p.value > 0);
+            
+            if (totalHeight > 0) {
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "rgba(0,0,0,1)"; 
+                roundRect(ctx, x, topY, width, totalHeight, [24, 0, 24, 0]);
+                ctx.fill();
+                resetShadow(ctx);
+            }
+
+            activeParties.forEach((p, index) => {
+                const height = p.value * scale;
+                const y = currentY - height;
+
+                const isBottom = (index === 0);
+                const isTop = (index === activeParties.length - 1);
+                
+                let r = [0, 0, 0, 0];
+                if (isBottom && isTop) {
+                    r = [24, 0, 24, 0];
+                } else if (isBottom) {
+                    r = [0, 0, 24, 0];
+                } else if (isTop) {
+                    r = [24, 0, 0, 0];
+                }
+
+                ctx.fillStyle = p.color;
+                roundRect(ctx, x, y, width, height, r);
+                ctx.fill();
+                
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                currentY -= height;
+            });
+
+            currentY = bottomY; 
+            activeParties.forEach((p) => {
+                const height = p.value * scale;
+                const y = currentY - height;
+
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "white";
+                
+                ctx.font = "55px 'Siri Expressen Black Condensed', sans-serif"; 
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(p.id, x + width/2, y + height/2 + 5); 
+
+                ctx.font = "46px 'Siri Expressen Black Condensed', sans-serif";
+                ctx.textAlign = "right";
+                ctx.fillText(p.value.toFixed(1).replace('.', ',') + "%", x + width - 24, y + height - 34);
+                resetShadow(ctx);
+
+                currentY -= height;
+            });
+        }
+
+        function roundRect(ctx, x, y, width, height, r) {
+            let tl = 0, tr = 0, br = 0, bl = 0;
+            if (typeof r === 'number') {
+                tl = tr = br = bl = r;
+            } else if (Array.isArray(r)) {
+                tl = r[0] || 0;
+                tr = r[1] !== undefined ? r[1] : tl;
+                br = r[2] !== undefined ? r[2] : tl;
+                bl = r[3] !== undefined ? r[3] : tr;
+            }
+            ctx.beginPath();
+            ctx.moveTo(x + tl, y);
+            ctx.lineTo(x + width - tr, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + tr);
+            ctx.lineTo(x + width, y + height - br);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - br, y + height);
+            ctx.lineTo(x + bl, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - bl);
+            ctx.lineTo(x, y + tl);
+            ctx.quadraticCurveTo(x, y, x + tl, y);
+            ctx.closePath();
+        }
+
+        function downloadPNG(canvasId, name) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = `${name}-1080x1920.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        window.onload = () => {
+            createInputs();
+            document.fonts.ready.then(drawChart);
+        };
+    </script>
+</body>
+</html>
