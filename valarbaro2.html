@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafikgenerator 9:16 - Väljarbarometer & Block</title>
+    <!-- JSZip för PNG-sekvens (ZIP) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        @font-face {
+            font-family: 'Siri Expressen Black Condensed';
+            src: url('SiriExpressen-BlackCondensed.otf') format('opentype');
+        }
+        body { 
+            background: #1e1e1e; 
+            color: #fff; 
+            font-family: sans-serif; 
+            margin: 0;
+            padding: 2vw;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .app-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            justify-content: center;
+            max-width: 1900px;
+            margin: 0 auto;
+        }
+        h2 { 
+            margin-top: 0; 
+            font-family: 'Siri Expressen Black Condensed', sans-serif;
+            font-size: clamp(22px, 1.6vw, 30px);
+            border-bottom: 2px solid #444;
+            padding-bottom: 8px;
+        }
+        .panel { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 15px; 
+            flex: 1 1 320px;
+            max-width: 380px;
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+        .charts-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 25px;
+            flex: 3 1 700px;
+            justify-content: center;
+        }
+        .chart-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+            flex: 1 1 340px;
+            max-width: 450px;
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+        .party-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #333;
+        }
+        input[type="number"] {
+            background: #ffffff;
+            border: 1px solid #ccc;
+            color: #000000;
+            border-radius: 4px;
+            text-align: right;
+            width: 75px;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            padding-right: 8px;
+            font-size: 17px;
+            height: 32px;
+        }
+        button {
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            width: 100%;
+            font-family: 'Siri Expressen Black Condensed', sans-serif; 
+            font-size: clamp(16px, 1.2vw, 20px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            padding: 12px;
+        }
+        button:hover { 
+            opacity: 0.9; 
+            transform: translateY(-2px);
+        }
+        button:disabled {
+            background: #666 !important;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-preview {
+            background: #F39C12;
+            color: white;
+        }
+        .btn-png {
+            background: #006DBB;
+            color: white;
+        }
+        .btn-zip {
+            background: #E50000;
+            color: white;
+        }
+        
+        /* Låst 9:16 responsivitet */
+        .canvas-box {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas { 
+            width: 100%; 
+            max-width: calc(62vh * 9 / 16);
+            height: auto; 
+            aspect-ratio: 9 / 16;
+            background-image: linear-gradient(45deg, #333 25%, transparent 25%), linear-gradient(-45deg, #333 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #333 75%), linear-gradient(-45deg, transparent 75%, #333 75%);
+            background-size: 20px 20px; 
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border: 2px solid #555;
+            border-radius: 8px;
+            box-sizing: border-box;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .guide-box {
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-left: 4px solid #006DBB;
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-family: Arial, sans-serif;
+            font-size: 12px;
+            line-height: 1.45;
+            color: #ccc;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .guide-box h4 {
+            margin: 0 0 6px 0;
+            color: #fff;
+            font-size: 13px;
+            font-family: 'Siri Expressen Black Condensed', sans-serif;
+        }
+        .guide-box ol {
+            margin: 0;
+            padding-left: 16px;
+        }
+        .guide-box li {
+            margin-bottom: 4px;
+        }
+
+        .status-msg {
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            font-size: 13px;
+            color: #00FF00;
+            text-align: center;
+            display: none;
+        }
+
+        .font-preload { font-family: 'Siri Expressen Black Condensed'; visibility: hidden; position: absolute; }
+    </style>
+</head>
+<body>
+    <div class="font-preload">Preload</div>
+
+    <div class="app-container">
+        <!-- 1. KONTROLLER MED REALTIDSINMATNING -->
+        <div class="panel">
+            <h2>1. Partiernas procent (%)</h2>
+            <div id="inputs"></div>
+            <div style="font-size: 12px; color: #888; font-family: Arial; margin-top: 5px;">
+                Diagrammen till höger uppdateras direkt i realtid när du skriver.
+            </div>
+            <button id="btn-toggle-c" onclick="toggleCBlock()" style="background: #555; color: white; margin-top: 15px; font-size: 15px; padding: 10px;">C tillhör Vänsterblocket (Klicka för att byta)</button>
+        </div>
+
+        <!-- 2. DIAGRAMMEN -->
+        <div class="charts-container">
+            <!-- VÄLJARBAROMETERN -->
+            <div class="chart-wrapper">
+                <h2>2. Väljarbarometer</h2>
+                <div class="canvas-box">
+                    <canvas id="canvasHorizontal" width="1080" height="1920"></canvas>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: auto;">
+                    <button id="btn-prev-h" class="btn-preview" onclick="playPreview('horizontal')">▶ Förhandsgranska animation</button>
+                    <button class="btn-png" onclick="downloadPNG('canvasHorizontal', 'valjarbarometer')">Ladda ner Stillbild (PNG)</button>
+                    <button id="btn-zip-h" class="btn-zip" onclick="exportPNGSequence('horizontal')">Ladda ner PNG-sekvens (ZIP)</button>
+                    <div id="status-h" class="status-msg">Genererar bildrutor...</div>
+                </div>
+            </div>
+
+            <!-- BLOCKINDELNINGEN -->
+            <div class="chart-wrapper">
+                <h2>3. Blockindelning</h2>
+                <div class="canvas-box">
+                    <canvas id="canvasBlock" width="1080" height="1920"></canvas>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: auto;">
+                    <button id="btn-prev-b" class="btn-preview" onclick="playPreview('block')">▶ Förhandsgranska animation</button>
+                    <button class="btn-png" onclick="downloadPNG('canvasBlock', 'blockindelning')">Ladda ner Stillbild (PNG)</button>
+                    <button id="btn-zip-b" class="btn-zip" onclick="exportPNGSequence('block')">Ladda ner PNG-sekvens (ZIP)</button>
+                    <div id="status-b" class="status-msg">Genererar bildrutor...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PREMIERE-GUIDE LÄNGST NER -->
+    <div style="max-width: 1200px; margin: 25px auto 0 auto;">
+        <div class="guide-box">
+            <h4>Premiere Pro Snabbguide (Animerad PNG-sekvens):</h4>
+            <ol>
+                <li>Klicka på <strong>"Ladda ner PNG-sekvens (ZIP)"</strong> under önskat diagram och packa upp ZIP-filen.</li>
+                <li>I Premiere Pro: Välj <strong>File > Import</strong> och klicka på <strong>Options</strong> längst ner i importrutan.</li>
+                <li>Bocka i <strong>"Image Sequence"</strong> och markera den första bildfilen (<code>..._000.png</code>) — tryck Open.</li>
+                <li>Premiere tolkar sekvensen som en vanlig videofil med 100 % transparens utan behov av chroma keying.</li>
+                <li>Vill du hålla kvar sista framen? Lägg på effekten <strong>"Add Frame Hold"</strong> på sista bildrutan i tidslinjen.</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const parties = [
+            { id: 'V', name: 'Vänsterpartiet', color: '#DB0000', value: 0.0 },
+            { id: 'S', name: 'Socialdemokraterna', color: '#FF0027', value: 0.0 },
+            { id: 'MP', name: 'Miljöpartiet', color: '#30A234', value: 0.0 },
+            { id: 'C', name: 'Centerpartiet', color: '#004937', value: 0.0 },
+            { id: 'L', name: 'Liberalerna', color: '#006DBB', value: 0.0 },
+            { id: 'KD', name: 'Kristdemokraterna', color: '#0D15BC', value: 0.0 },
+            { id: 'M', name: 'Moderaterna', color: '#195393', value: 0.0 },
+            { id: 'SD', name: 'Sverigedemokraterna', color: '#FFD500', value: 0.0 }
+        ];
+
+        let isBusy = false;
+        let isCInRightBlock = false;
+
+        function toggleCBlock() {
+            if (isBusy) return;
+            isCInRightBlock = !isCInRightBlock;
+            const btn = document.getElementById('btn-toggle-c');
+            if (isCInRightBlock) {
+                btn.innerText = "C tillhör Högerblocket (Klicka för att byta)";
+                btn.style.background = "#195393"; // M-blå som en hint
+            } else {
+                btn.innerText = "C tillhör Vänsterblocket (Klicka för att byta)";
+                btn.style.background = "#555";
+            }
+            drawAll(1.0);
+        }
+
+        function createInputs() {
+            const container = document.getElementById('inputs');
+            container.innerHTML = '';
+            parties.forEach((p, i) => {
+                container.innerHTML += `
+                <div class="party-row">
+                    <div style="display: flex; align-items: center;">
+                        <div style="width: 16px; height: 16px; background-color: ${p.color}; border-radius: 4px; margin-right: 10px; border: 1px solid rgba(255,255,255,0.2);"></div>
+                        <label style="color: #ffffff; font-size: clamp(16px, 1.1vw, 21px); font-family: 'Siri Expressen Black Condensed', sans-serif; letter-spacing: 0.5px;">${p.name}</label>
+                    </div>
+                    <input type="number" id="val_${i}" value="${p.value}" step="0.1" oninput="updateValues()">
+                </div>`;
+            });
+        }
+
+        // Realtidsuppdatering så fort du skriver!
+        function updateValues() {
+            if (isBusy) return;
+            parties.forEach((p, i) => {
+                const el = document.getElementById(`val_${i}`);
+                if (el) p.value = parseFloat(el.value) || 0.0;
+            });
+            drawAll(1.0);
+        }
+
+        function drawAll(progress) {
+            document.fonts.ready.then(() => {
+                const cHoriz = document.getElementById('canvasHorizontal');
+                const ctxHoriz = cHoriz.getContext('2d');
+                ctxHoriz.clearRect(0, 0, cHoriz.width, cHoriz.height);
+                drawHorizontal(ctxHoriz, progress);
+
+                const cBlock = document.getElementById('canvasBlock');
+                const ctxBlock = cBlock.getContext('2d');
+                ctxBlock.clearRect(0, 0, cBlock.width, cBlock.height);
+                drawBlock(ctxBlock, progress);
+            });
+        }
+
+        function applyGlobalShadow(ctx) {
+            ctx.shadowColor = "rgba(0,0,0,0.6)"; 
+            ctx.shadowBlur = 10;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
+        function resetShadow(ctx) {
+            ctx.shadowColor = "transparent";
+            ctx.shadowBlur = 0;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
+        }
+
+        // --- VÄLJARBAROMETER (HORISONTELL ANIMERING) ---
+        function drawHorizontal(ctx, progress) {
+            if (progress === undefined) progress = 1.0;
+            
+            const startX = 150;
+            let startY = 400;
+            const boxSize = 96;
+            const gap = 16;
+            const rowSpacing = 18;
+            const scale = 15; 
+            
+            // 4%-spärren
+            const fourPercentX = startX + boxSize + gap + (4.0 * scale);
+            ctx.beginPath();
+            ctx.setLineDash([10, 10]);
+            ctx.moveTo(fourPercentX, startY - 20);
+            ctx.lineTo(fourPercentX, startY + (8 * (boxSize + rowSpacing)));
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.7)";
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.setLineDash([]); 
+
+            parties.forEach((p) => {
+                const currentVal = p.value * progress;
+
+                // Partibox
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = p.color;
+                roundRect(ctx, startX, startY, boxSize, boxSize, [24, 0, 24, 0]);
+                ctx.fill();
+                resetShadow(ctx);
+                ctx.strokeStyle = "white";
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Partibokstav
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "white";
+                ctx.font = "50px 'Siri Expressen Black Condensed', sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillText(p.id, startX + boxSize/2, startY + boxSize/2 + 5);
+
+                // Stapel
+                const barWidth = currentVal * scale;
+                const barX = startX + boxSize + gap;
+                
+                if (barWidth > 0) {
+                    applyGlobalShadow(ctx);
+                    ctx.fillStyle = p.color;
+                    roundRect(ctx, barX, startY, barWidth, boxSize, [24, 0, 24, 0]);
+                    ctx.fill();
+                    resetShadow(ctx);
+                    ctx.stroke();
+                }
+
+                // Siffra
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "white";
+                ctx.font = "50px 'Siri Expressen Black Condensed', sans-serif";
+                ctx.textAlign = "left";
+                const displayVal = currentVal.toFixed(1).replace('.', ',') + "%";
+                ctx.fillText(displayVal, barX + Math.max(barWidth, 0) + 20, startY + boxSize/2 + 5);
+                resetShadow(ctx);
+
+                startY += boxSize + rowSpacing;
+            });
+        }
+
+        // --- BLOCKINDELNING (NY ANIMERING) ---
+        function drawBlock(ctx, progress) {
+            if (progress === undefined) progress = 1.0;
+
+            let leftBlock, rightBlock;
+            if (isCInRightBlock) {
+                leftBlock = [parties[1], parties[0], parties[2]]; // S, V, MP
+                rightBlock = [parties[6], parties[7], parties[5], parties[4], parties[3]]; // M, SD, KD, L, C
+            } else {
+                leftBlock = [parties[1], parties[0], parties[3], parties[2]]; // S, V, C, MP
+                rightBlock = [parties[6], parties[7], parties[5], parties[4]]; // M, SD, KD, L
+            }
+
+            const sumLeft = leftBlock.reduce((a, b) => a + b.value, 0);
+            const sumRight = rightBlock.reduce((a, b) => a + b.value, 0);
+
+            const scale = 22.5; 
+            const barWidth = 330;
+            const gap = 60;
+            const bottomY = 1600;
+            
+            const leftX = (1080 - (barWidth * 2 + gap)) / 2;
+            const rightX = leftX + barWidth + gap;
+
+            drawStackedBar(ctx, leftBlock, sumLeft, leftX, bottomY, barWidth, scale, progress);
+            drawStackedBar(ctx, rightBlock, sumRight, rightX, bottomY, barWidth, scale, progress);
+        }
+
+        function drawStackedBar(ctx, blockParties, total, x, bottomY, width, scale, progress) {
+            const curTotal = total * progress;
+            const totalHeight = curTotal * scale;
+            const topY = bottomY - totalHeight;
+
+            // RITA TOTALSIFFRA OVANFÖR BLOCKEN (räknar upp synkat med blockhöjden)
+            if (curTotal > 0) {
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "white";
+                ctx.font = "100px 'Siri Expressen Black Condensed', sans-serif";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "bottom"; 
+                ctx.fillText(curTotal.toFixed(1).replace('.', ',') + "%", x + width/2, topY - 12);
+                resetShadow(ctx);
+            }
+
+            const activeParties = [...blockParties].reverse().filter(p => p.value > 0);
+            
+            // Bakgrundsskugga för blocket
+            if (totalHeight > 0) {
+                applyGlobalShadow(ctx);
+                ctx.fillStyle = "rgba(0,0,0,1)"; 
+                roundRect(ctx, x, topY, width, totalHeight, [24, 0, 24, 0]);
+                ctx.fill();
+                resetShadow(ctx);
+            }
+
+            // RITA UT BLOCKENS SEKTIONER
+            let currentY = bottomY;
+            activeParties.forEach((p, index) => {
+                const height = (p.value * progress) * scale;
+                const y = currentY - height;
+
+                const isBottom = (index === 0);
+                const isTop = (index === activeParties.length - 1);
+                
+                let r = [0, 0, 0, 0];
+                if (isBottom && isTop) {
+                    r = [24, 0, 24, 0];
+                } else if (isBottom) {
+                    r = [0, 0, 24, 0];
+                } else if (isTop) {
+                    r = [24, 0, 0, 0];
+                }
+
+                if (height > 0) {
+                    ctx.fillStyle = p.color;
+                    roundRect(ctx, x, y, width, height, r);
+                    ctx.fill();
+                    
+                    ctx.strokeStyle = "white";
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                }
+
+                currentY -= height;
+            });
+
+            // TEXT & PROCENT INUTI BLOCKEN
+            currentY = bottomY; 
+            
+            activeParties.forEach((p) => {
+                const currentPartyVal = p.value * progress;
+                const height = currentPartyVal * scale;
+                const y = currentY - height;
+
+                // Partibokstav och procentsiffra dyker upp när sektionen motsvarar >= 3%
+                if (currentPartyVal >= 3.0) {
+                    applyGlobalShadow(ctx);
+                    ctx.fillStyle = "white";
+                    
+                    // Partibokstav i mitten
+                    ctx.font = "55px 'Siri Expressen Black Condensed', sans-serif"; 
+                    ctx.textAlign = "center";
+                    ctx.textBaseline = "middle";
+                    ctx.fillText(p.id, x + width/2, y + height/2 + 5); 
+
+                    // Procentsiffra nere till höger i sektionen (räknar upp synkat)
+                    ctx.font = "46px 'Siri Expressen Black Condensed', sans-serif";
+                    ctx.textAlign = "right";
+                    ctx.fillText(currentPartyVal.toFixed(1).replace('.', ',') + "%", x + width - 24, y + height - 34);
+                    resetShadow(ctx);
+                }
+
+                currentY -= height;
+            });
+        }
+
+        function roundRect(ctx, x, y, width, height, r) {
+            let tl = 0, tr = 0, br = 0, bl = 0;
+            if (typeof r === 'number') {
+                tl = tr = br = bl = r;
+            } else if (Array.isArray(r)) {
+                tl = r[0] || 0;
+                tr = r[1] !== undefined ? r[1] : tl;
+                br = r[2] !== undefined ? r[2] : tl;
+                bl = r[3] !== undefined ? r[3] : tr;
+            }
+            ctx.beginPath();
+            ctx.moveTo(x + tl, y);
+            ctx.lineTo(x + width - tr, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + tr);
+            ctx.lineTo(x + width, y + height - br);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - br, y + height);
+            ctx.lineTo(x + bl, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - bl);
+            ctx.lineTo(x, y + tl);
+            ctx.quadraticCurveTo(x, y, x + tl, y);
+            ctx.closePath();
+        }
+
+        // --- STILLBILDSNEDLADDNING ---
+        function downloadPNG(canvasId, name) {
+            const canvas = document.getElementById(canvasId);
+            const link = document.createElement('a');
+            link.download = `${name}-1080x1920.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // --- FÖRHANDSGRANSKNING AV ANIMERING ---
+        let previewRaf = null;
+        function playPreview(type) {
+            if (isBusy) return;
+
+            const isHoriz = (type === 'horizontal');
+            const canvas = document.getElementById(isHoriz ? 'canvasHorizontal' : 'canvasBlock');
+            const ctx = canvas.getContext('2d');
+            const btn = document.getElementById(isHoriz ? 'btn-prev-h' : 'btn-prev-b');
+            btn.disabled = true;
+
+            const animSec = 1.6;
+            const startTime = performance.now();
+            if (previewRaf) cancelAnimationFrame(previewRaf);
+
+            function step(now) {
+                const elapsed = (now - startTime) / 1000;
+                let rawProgress = elapsed / animSec;
+                if (rawProgress > 1) rawProgress = 1;
+                
+                // Mjuk ease-out inbromsning
+                const progress = 1 - Math.pow(1 - rawProgress, 4);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (isHoriz) {
+                    drawHorizontal(ctx, progress);
+                } else {
+                    drawBlock(ctx, progress);
+                }
+
+                if (rawProgress < 1) {
+                    previewRaf = requestAnimationFrame(step);
+                } else {
+                    btn.disabled = false;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    if (isHoriz) drawHorizontal(ctx, 1.0);
+                    else drawBlock(ctx, 1.0);
+                }
+            }
+            previewRaf = requestAnimationFrame(step);
+        }
+
+        // --- ANIMERAD PNG-SEKVENS (ZIP) EXPORT ---
+        async function exportPNGSequence(type) {
+            if (typeof JSZip === "undefined") {
+                alert("JSZip kunde inte laddas. Kontrollera internetanslutningen!");
+                return;
+            }
+
+            const isHoriz = (type === 'horizontal');
+            const canvas = document.getElementById(isHoriz ? 'canvasHorizontal' : 'canvasBlock');
+            const ctx = canvas.getContext('2d');
+            const statusEl = document.getElementById(isHoriz ? 'status-h' : 'status-b');
+            const btnZip = document.getElementById(isHoriz ? 'btn-zip-h' : 'btn-zip-b');
+
+            isBusy = true;
+            btnZip.disabled = true;
+            statusEl.style.display = 'block';
+
+            const fps = 30;
+            const animSec = 1.6;
+            const holdSec = 1.5;
+            const totalFrames = Math.round((animSec + holdSec) * fps);
+
+            const zip = new JSZip();
+            const prefix = isHoriz ? 'valjarbaro' : 'blockindelning';
+
+            for (let frame = 0; frame <= totalFrames; frame++) {
+                const currentTime = frame / fps;
+                let rawProgress = currentTime / animSec;
+                if (rawProgress > 1) rawProgress = 1;
+                const progress = 1 - Math.pow(1 - rawProgress, 4);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                if (isHoriz) {
+                    drawHorizontal(ctx, progress);
+                } else {
+                    drawBlock(ctx, progress);
+                }
+
+                const dataUrl = canvas.toDataURL('image/png');
+                const base64Data = dataUrl.replace(/^data:image\/png;base64,/, '');
+
+                const frameName = `${prefix}_${String(frame).padStart(3, '0')}.png`;
+                zip.file(frameName, base64Data, { base64: true });
+
+                statusEl.innerText = `Genererar rutor: ${frame} / ${totalFrames}...`;
+                await new Promise(r => setTimeout(r, 4));
+            }
+
+            statusEl.innerText = "Packar ZIP-fil...";
+            const zipContent = await zip.generateAsync({ type: 'blob' });
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(zipContent);
+            link.download = `${prefix}_animering_sekvens.zip`;
+            link.click();
+            URL.revokeObjectURL(link.href);
+
+            isBusy = false;
+            btnZip.disabled = false;
+            statusEl.style.display = 'none';
+            drawAll(1.0);
+        }
+
+        window.onload = () => {
+            createInputs();
+            document.fonts.ready.then(() => drawAll(1.0));
+        };
+    </script>
+</body>
+</html>
